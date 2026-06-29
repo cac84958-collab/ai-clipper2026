@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ai-clipper — clips verticaux en local</title>
+<style>
+  :root{
+    --bg:#0d0b16; --card:#17142420; --panel:#191527; --line:#2a2440;
+    --txt:#ece9f5; --mut:#9a93b8; --acc:#7c5cff; --acc2:#b06bff;
+    --ok:#34d399; --warn:#fbbf24; --bad:#fb7185;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif;
+    color:var(--txt);background:
+      radial-gradient(900px 500px at 80% -10%,#3a1d6e33,transparent),
+      radial-gradient(700px 500px at -10% 10%,#5b2da033,transparent),var(--bg);
+    min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+  .logo{width:38px;height:38px;border-radius:11px;
+    background:linear-gradient(135deg,var(--acc),var(--acc2));
+    display:grid;place-items:center;font-size:20px}
+  h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.3px}
+  .sub{color:var(--mut);margin:2px 0 22px}
+  .pill{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line);
+    color:var(--mut);background:#0000}
+  .pill b{color:var(--txt)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:18px;box-shadow:0 10px 40px #0006}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{flex:0 0 auto;padding:8px 16px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);color:var(--mut);background:#0000;font-weight:600}
+  .tab.on{color:#fff;border-color:transparent;background:linear-gradient(135deg,var(--acc),var(--acc2))}
+  label{display:block;font-size:12px;color:var(--mut);margin:0 0 5px}
+  input,select{width:100%;padding:11px 12px;border-radius:10px;background:#0f0c1c;
+    border:1px solid var(--line);color:var(--txt);font:inherit;outline:none}
+  input:focus,select:focus{border-color:var(--acc)}
+  input[type=file]{padding:9px}
+  .drop{border:1.5px dashed var(--line);border-radius:12px;padding:22px;text-align:center;color:var(--mut)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:14px}
+  .row{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:14px}
+  .chk{display:flex;align-items:center;gap:8px;color:var(--txt);font-size:14px}
+  .chk input{width:auto}
+  .btn{margin-top:18px;width:100%;padding:14px;border:0;border-radius:12px;cursor:pointer;
+    font-size:16px;font-weight:700;color:#fff;
+    background:linear-gradient(135deg,var(--acc),var(--acc2))}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .hide{display:none}
+  /* progress */
+  #progress{margin-top:22px}
+  .status{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-weight:600}
+  .spin{width:16px;height:16px;border:2px solid #fff3;border-top-color:#fff;
+    border-radius:50%;animation:s .8s linear infinite}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .logbox{background:#0a0814;border:1px solid var(--line);border-radius:12px;padding:12px;
+    font:12px/1.55 ui-monospace,Consolas,monospace;color:#b9b2d6;max-height:230px;overflow:auto;white-space:pre-wrap}
+  /* results */
+  .clips{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px;margin-top:22px}
+  .clip{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .clip video{width:100%;display:block;background:#000;aspect-ratio:9/16;object-fit:cover}
+  .clip .meta{padding:12px}
+  .clip .t{font-weight:700;font-size:14px;margin:0 0 6px;line-height:1.3}
+  .badge{position:absolute;top:10px;left:10px;padding:4px 9px;border-radius:999px;
+    font-size:12px;font-weight:800;color:#06110c;background:var(--ok)}
+  .badge.mid{background:var(--warn);color:#2a1c00}
+  .badge.low{background:#cbd5e1;color:#1e293b}
+  .vidwrap{position:relative}
+  .tags{color:var(--acc2);font-size:12px;margin:2px 0 10px}
+  .dl{display:block;text-align:center;padding:9px;border-radius:9px;text-decoration:none;
+    font-weight:700;font-size:13px;color:#fff;border:1px solid var(--line)}
+  .dl:hover{background:#241d3d}
+  .err{color:var(--bad);margin-top:14px;font-weight:600}
+  .dur{color:var(--mut);font-weight:500}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🎬</div>
+    <div>
+      <h1>ai-clipper</h1>
+    </div>
+    <span id="llm" class="pill" style="margin-left:auto">LLM…</span>
+  </header>
+  <p class="sub">Colle un lien YouTube ou dépose une vidéo → des shorts verticaux 9:16,
+    recadrés sur le locuteur, sous-titrés et notés. 100 % local.</p>
+
+  <div class="card">
+    <div class="tabs">
+      <div class="tab on" data-tab="url">🔗 Lien YouTube</div>
+      <div class="tab" data-tab="file">⬆️ Fichier</div>
+    </div>
+
+    <div id="pane-url">
+      <label>URL de la vidéo</label>
+      <input id="url" placeholder="https://www.youtube.com/watch?v=…">
+    </div>
+    <div id="pane-file" class="hide">
+      <label>Fichier vidéo (mp4, mov, mkv…)</label>
+      <input id="file" type="file" accept="video/*">
+    </div>
+
+    <div class="grid">
+      <div><label>Nb de clips</label><input id="n" type="number" value="3" min="1" max="10"></div>
+      <div><label>Recadrage</label>
+        <select id="layout">
+          <option value="track">AI Reframe (suit le locuteur)</option>
+          <option value="crop">Crop centré</option>
+          <option value="blur">Fond flou</option>
+        </select>
+      </div>
+      <div><label>Modèle Whisper</label>
+        <select id="model">
+          <option value="tiny">tiny (rapide)</option>
+          <option value="base">base</option>
+          <option value="small" selected>small</option>
+          <option value="medium">medium (lent)</option>
+        </select>
+      </div>
+      <div><label>Langue (vide = auto)</label><input id="lang" placeholder="fr, en…"></div>
+      <div><label>Durée des clips</label>
+        <select id="duration">
+          <option value="30">30 secondes</option>
+          <option value="60">1 minute</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <label class="chk"><input id="captions" type="checkbox" checked> Sous-titres animés</label>
+      <label class="chk"><input id="usellm" type="checkbox" checked> Sélection IA (Ollama)</label>
+      <div style="flex:1;min-width:160px"><input id="llmmodel" placeholder="modèle LLM (option., ex. qwen2.5:7b)"></div>
+    </div>
+
+    <button id="go" class="btn">✨ Générer les clips</button>
+  </div>
+
+  <div id="progress" class="hide">
+    <div class="status"><span class="spin" id="spin"></span><span id="statustxt">En attente…</span></div>
+    <div id="logbox" class="logbox"></div>
+    <div id="err" class="err hide"></div>
+  </div>
+
+  <div id="clips" class="clips"></div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let curTab = "url", polling = null;
+
+// tabs
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on"); curTab = t.dataset.tab;
+  $("#pane-url").classList.toggle("hide", curTab !== "url");
+  $("#pane-file").classList.toggle("hide", curTab !== "file");
+});
+
+// llm status
+fetch("/api/health").then(r => r.json()).then(d => {
+  $("#llm").innerHTML = d.llm
+    ? `LLM&nbsp;<b>${d.model}</b> via ${d.llm}`
+    : `LLM&nbsp;<b>heuristique</b> (Ollama absent)`;
+}).catch(() => $("#llm").textContent = "LLM ?");
+
+$("#go").onclick = async () => {
+  const fd = new FormData();
+  if (curTab === "file") {
+    const f = $("#file").files[0];
+    if (!f) return alert("Choisis un fichier.");
+    fd.append("file", f);
+  } else {
+    if (!$("#url").value.trim()) return alert("Colle une URL.");
+    fd.append("url", $("#url").value.trim());
+  }
+  fd.append("n", $("#n").value);
+  const [mn, mx] = $("#duration").value === "60" ? [45, 65] : [20, 35];
+  fd.append("min_dur", mn);
+  fd.append("max_dur", mx);
+  fd.append("model", $("#model").value);
+  fd.append("lang", $("#lang").value);
+  fd.append("layout", $("#layout").value);
+  fd.append("captions", $("#captions").checked);
+  fd.append("use_llm", $("#usellm").checked);
+  fd.append("llm_model", $("#llmmodel").value);
+
+  $("#go").disabled = true;
+  $("#clips").innerHTML = "";
+  $("#err").classList.add("hide");
+  $("#progress").classList.remove("hide");
+  $("#statustxt").textContent = "Envoi…";
+  $("#logbox").textContent = "";
+
+  let res;
+  try { res = await (await fetch("/api/jobs", {method:"POST", body:fd})).json(); }
+  catch(e){ return fail("Échec de l'envoi: " + e); }
+  if (!res.id) return fail(res.detail || "Erreur serveur");
+  poll(res.id);
+};
+
+function fail(msg){
+  $("#go").disabled = false;
+  $("#spin").classList.add("hide");
+  $("#statustxt").textContent = "Erreur";
+  $("#err").textContent = msg; $("#err").classList.remove("hide");
+}
+
+function poll(id){
+  clearInterval(polling);
+  const labels = {queued:"En file…", running:"Traitement en cours…", done:"Terminé", error:"Erreur"};
+  polling = setInterval(async () => {
+    let j;
+    try { j = await (await fetch("/api/jobs/" + id)).json(); } catch { return; }
+    $("#statustxt").textContent = labels[j.status] || j.status;
+    $("#logbox").textContent = (j.logs || []).slice(-40).join("\n");
+    $("#logbox").scrollTop = $("#logbox").scrollHeight;
+    if (j.status === "done" || j.status === "error"){
+      clearInterval(polling);
+      $("#spin").classList.add("hide");
+      $("#go").disabled = false;
+      if (j.error){ $("#err").textContent = j.error; $("#err").classList.remove("hide"); }
+      renderClips(id, j.clips || []);
+    }
+  }, 1500);
+}
+
+function renderClips(id, clips){
+  const box = $("#clips"); box.innerHTML = "";
+  clips.forEach(c => {
+    const cls = c.score >= 80 ? "" : c.score >= 60 ? "mid" : "low";
+    const src = `/api/jobs/${id}/file/${encodeURIComponent(c.file)}`;
+    const el = document.createElement("div");
+    el.className = "clip";
+    el.innerHTML = `
+      <div class="vidwrap">
+        <span class="badge ${cls}">${c.score ?? "–"}/100</span>
+        <video src="${src}" controls preload="metadata"></video>
+      </div>
+      <div class="meta">
+        <p class="t">${escapeHtml(c.title || "Clip")} <span class="dur">· ${Math.round(c.duration||0)}s</span></p>
+        <div class="tags">${(c.hashtags||[]).map(escapeHtml).join(" ")}</div>
+        <a class="dl" href="${src}" download>⬇ Télécharger</a>
+      </div>`;
+    box.appendChild(el);
+  });
+}
+const escapeHtml = s => (s||"").replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+</script>
+</body>
+</html>
